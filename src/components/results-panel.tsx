@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { LaboratoryRow, MoleculeRow, ReportResponse } from "@/lib/nomenclature/api";
+import { toComparisonKey } from "@/lib/nomenclature/normalize";
 import { formatCount, isoToFrench, pluralize } from "@/lib/format";
 
 type View = {
@@ -13,6 +14,7 @@ type View = {
 type Tab = "laboratories" | "molecules";
 
 const PAGE_SIZE = 50;
+const NO_LABS: string[] = [];
 
 export function ResultsPanel({
   view,
@@ -30,10 +32,38 @@ export function ResultsPanel({
   onQueryChange: (value: string) => void;
 }) {
   const [tab, setTab] = useState<Tab>("laboratories");
-  // Pagination resets by itself whenever the tab, the search or the period changes.
+  // Pagination and expanded rows reset by themselves when the tab, search or period changes.
   const listKey = `${tab}|${query.trim()}|${periodKey}`;
   const [pagination, setPagination] = useState({ key: listKey, visible: PAGE_SIZE });
+  const [expansion, setExpansion] = useState<{ key: string; laboratories: string[] }>({
+    key: listKey,
+    laboratories: NO_LABS,
+  });
+
+  const moleculesByLaboratory = useMemo(() => {
+    const grouped = new Map<string, MoleculeRow[]>();
+    for (const molecule of view?.molecules ?? []) {
+      // Keyed like the aggregation itself: two typography variants of one laboratory
+      // share a single summary row, so they must share a single molecule list.
+      const key = toComparisonKey(molecule.laboratory);
+      const existing = grouped.get(key);
+      if (existing) existing.push(molecule);
+      else grouped.set(key, [molecule]);
+    }
+    return grouped;
+  }, [view]);
+
   const visible = pagination.key === listKey ? pagination.visible : PAGE_SIZE;
+  const expanded = expansion.key === listKey ? expansion.laboratories : NO_LABS;
+
+  const toggleLaboratory = (laboratory: string) => {
+    setExpansion({
+      key: listKey,
+      laboratories: expanded.includes(laboratory)
+        ? expanded.filter((name) => name !== laboratory)
+        : [...expanded, laboratory],
+    });
+  };
 
   if (error) {
     return (
@@ -92,7 +122,12 @@ export function ResultsPanel({
       ) : (
         <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
           {tab === "laboratories" ? (
-            <LaboratoryTable rows={shown as LaboratoryRow[]} />
+            <LaboratoryTable
+              rows={shown as LaboratoryRow[]}
+              moleculesByLaboratory={moleculesByLaboratory}
+              expanded={expanded}
+              onToggle={toggleLaboratory}
+            />
           ) : (
             <MoleculeTable rows={shown as MoleculeRow[]} />
           )}
@@ -150,21 +185,81 @@ function TabButton({
   );
 }
 
-function LaboratoryTable({ rows }: { rows: LaboratoryRow[] }) {
+/** Each laboratory unfolds to reveal its molecules and their first registration date. */
+function LaboratoryTable({
+  rows,
+  moleculesByLaboratory,
+  expanded,
+  onToggle,
+}: {
+  rows: LaboratoryRow[];
+  moleculesByLaboratory: Map<string, MoleculeRow[]>;
+  expanded: string[];
+  onToggle: (laboratory: string) => void;
+}) {
   return (
     <ul className="divide-y divide-border">
-      {rows.map((row) => (
-        <li
-          key={row.laboratory}
-          className="flex items-center justify-between gap-4 px-4 py-3 text-sm sm:py-2.5"
-        >
-          <span className="min-w-0 truncate font-medium text-text">{row.laboratory}</span>
-          <span className="shrink-0 tabular-nums text-text-muted">
-            {pluralize(row.moleculesCount, "molécule")}
-          </span>
-        </li>
-      ))}
+      {rows.map((row) => {
+        const isOpen = expanded.includes(row.laboratory);
+        const molecules = moleculesByLaboratory.get(toComparisonKey(row.laboratory)) ?? [];
+        const panelId = `labo-${row.laboratory.replace(/\W+/g, "-").toLowerCase()}`;
+        return (
+          <li key={row.laboratory}>
+            <button
+              type="button"
+              onClick={() => onToggle(row.laboratory)}
+              aria-expanded={isOpen}
+              aria-controls={panelId}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-surface-muted sm:py-2.5"
+            >
+              <Chevron open={isOpen} />
+              <span className="min-w-0 flex-1 truncate font-medium text-text">{row.laboratory}</span>
+              <span className="shrink-0 tabular-nums text-text-muted">
+                {pluralize(row.moleculesCount, "molécule")}
+              </span>
+            </button>
+
+            {isOpen ? (
+              <ul id={panelId} className="border-t border-border bg-surface-muted">
+                {molecules.map((molecule) => (
+                  <li
+                    key={molecule.dci}
+                    className="flex flex-col gap-0.5 border-b border-border/60 py-2 pl-11 pr-4 text-[13px] last:border-b-0 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3"
+                  >
+                    <span className="min-w-0 text-text sm:truncate">{molecule.dci}</span>
+                    <span className="shrink-0 tabular-nums text-text-subtle">
+                      {isoToFrench(molecule.firstRegistrationDate)}
+                      {molecule.registrationsCount > 1
+                        ? ` · ${pluralize(molecule.registrationsCount, "enregistrement")}`
+                        : null}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        );
+      })}
     </ul>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden="true"
+      className={`h-3.5 w-3.5 shrink-0 text-text-subtle transition-transform ${open ? "rotate-90" : ""}`}
+    >
+      <path
+        d="M6 3.5 10.5 8 6 12.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
