@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #fbfcfd;
+  --surface: #ffffff;
+  --surface-muted: #f6f8fa;
+  --border: #e6e9ee;
+  --border-strong: #d5dae2;
+  --text: #0d1117;
+  --text-muted: #5b6673;
+  --text-subtle: #8b95a1;
+  --accent: #2f5fe0;
+  --accent-hover: #274fbd;
+  --accent-soft: #eef2fe;
+  --danger: #b3261e;
+  --shadow: 0 1px 2px rgba(13, 17, 23, 0.04), 0 8px 24px -12px rgba(13, 17, 23, 0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b0d10;
+    --surface: #121519;
+    --surface-muted: #171b20;
+    --border: #232830;
+    --border-strong: #2f3540;
+    --text: #e9edf2;
+    --text-muted: #9aa5b1;
+    --text-subtle: #767f8b;
+    --accent: #6b93ff;
+    --accent-hover: #83a5ff;
+    --accent-soft: #182034;
+    --danger: #ff8a80;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -12px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Native date inputs keep their platform picker but follow the app palette. */
+input[type="date"] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  input[type="date"] {
+    color-scheme: dark;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
