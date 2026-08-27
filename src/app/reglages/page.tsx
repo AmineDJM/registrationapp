@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BuildStamp } from "@/components/build-stamp";
 import { SourceManager, type SourceState } from "@/components/source-manager";
 import { serializeMeta } from "@/lib/nomenclature/api";
 import { getSourceState } from "@/lib/nomenclature/load";
@@ -54,6 +55,8 @@ export default async function ReglagesPage() {
           Le fichier de nomenclature est introuvable ou illisible sur le serveur.
         </p>
       )}
+
+      <BuildStamp />
     </main>
   );
 }

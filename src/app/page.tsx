@@ -1,3 +1,4 @@
+import { BuildStamp } from "@/components/build-stamp";
 import { NomenclatureTool } from "@/components/nomenclature-tool";
 import { serializeMeta } from "@/lib/nomenclature/api";
 import type { MetaResponse } from "@/lib/nomenclature/api";
@@ -30,5 +31,10 @@ export default async function Home() {
     );
   }
 
-  return <NomenclatureTool meta={meta} />;
+  return (
+    <>
+      <NomenclatureTool meta={meta} />
+      <BuildStamp />
+    </>
+  );
 }
