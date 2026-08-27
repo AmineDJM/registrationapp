@@ -1,8 +1,10 @@
 import ExcelJS from "exceljs";
 import { beforeAll, describe, expect, it } from "vitest";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { formatIso, toDayNumber } from "./excel-date";
 import { buildExportFileName, buildWorkbookBuffer } from "./export";
-import { readDatasetFromFile } from "./load";
+import { InvalidSourceError, readDatasetFromFile, validateSourceBuffer } from "./load";
 import { buildReport } from "./report";
 import type { NomenclatureDataset } from "./types";
 
@@ -91,5 +93,36 @@ describe("workbook export", () => {
     const detail = workbook.getWorksheet("Détail")!;
     expect(detail.rowCount).toBe(1 + report.registrations.length);
     expect(detail.columnCount).toBe(12);
+  }, 60_000);
+});
+
+describe("validateSourceBuffer", () => {
+  const MAX = 4_000_000;
+  const sourcePath = path.join(process.cwd(), "data", "nomenclature.xlsx");
+
+  it("accepts the real workbook", async () => {
+    const buffer = await readFile(sourcePath);
+    const validated = await validateSourceBuffer(buffer, MAX);
+    expect(validated.totalRows).toBe(5381);
+    expect(formatIso(validated.maxDay!)).toBe("2026-06-28");
+  }, 60_000);
+
+  it("refuses an empty file", async () => {
+    await expect(validateSourceBuffer(Buffer.alloc(0), MAX)).rejects.toBeInstanceOf(InvalidSourceError);
+  });
+
+  it("refuses a file over the size limit", async () => {
+    await expect(validateSourceBuffer(Buffer.alloc(MAX + 1), MAX)).rejects.toThrow(/dépasse/);
+  });
+
+  it("refuses anything that is not a .xlsx", async () => {
+    await expect(validateSourceBuffer(Buffer.from("du texte, pas un classeur"), MAX)).rejects.toThrow(
+      /n'est pas un fichier .xlsx/,
+    );
+  });
+
+  it("refuses a truncated workbook without touching anything", async () => {
+    const truncated = (await readFile(sourcePath)).subarray(0, 40_000);
+    await expect(validateSourceBuffer(truncated, MAX)).rejects.toThrow(/Classeur illisible/);
   }, 60_000);
 });

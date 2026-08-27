@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { PeriodForm } from "@/components/period-form";
 import { ResultsPanel } from "@/components/results-panel";
@@ -58,13 +59,21 @@ export function NomenclatureTool({ meta }: { meta: MetaResponse }) {
 
   return (
     <main className="mx-auto w-full max-w-4xl px-4 pb-20 pt-10 sm:px-6 sm:pt-16">
-      <header className="mb-8 sm:mb-10">
-        <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
-          Nomenclature pharmaceutique
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted sm:text-base">
-          Identifiez les molécules enregistrées par laboratoire sur une période donnée.
-        </p>
+      <header className="mb-8 flex items-start justify-between gap-4 sm:mb-10">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
+            Nomenclature pharmaceutique
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted sm:text-base">
+            Identifiez les molécules enregistrées par laboratoire sur une période donnée.
+          </p>
+        </div>
+        <Link
+          href="/reglages"
+          className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-text-muted transition-colors hover:border-border-strong hover:text-text"
+        >
+          Réglages
+        </Link>
       </header>
 
       <PeriodForm

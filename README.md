@@ -23,8 +23,14 @@ npm run typecheck  # tsc --noEmit
 npm run lint       # eslint
 ```
 
-Le chemin du fichier source peut être surchargé avec la variable d'environnement
-`NOMENCLATURE_FILE`.
+### Variables d'environnement
+
+| Variable | Rôle |
+| --- | --- |
+| `NOMENCLATURE_ADMIN_PASSWORD` | Mot de passe de l'écran **Réglages**. Obligatoire en production : sans elle, l'import est refusé (503). En développement local, l'import fonctionne sans mot de passe. |
+| `BLOB_READ_WRITE_TOKEN` | Store [Vercel Blob](https://vercel.com/docs/vercel-blob) où est conservé le fichier importé. Obligatoire en production : le disque d'une fonction serverless est en lecture seule. Ajouté automatiquement quand on crée un store Blob depuis le projet Vercel. |
+
+En local, sans `BLOB_READ_WRITE_TOKEN`, l'import écrit simplement dans `data/nomenclature.xlsx`.
 
 ## Règles métier
 
@@ -59,12 +65,14 @@ src/lib/nomenclature/
   load.ts         lecture ExcelJS, détection auto des en-têtes, cache mémoire
   filter.ts       filtre par période + résolution des bornes
   aggregate.ts    regroupement labo + DCI, synthèse par laboratoire
-  search.ts       recherche texte partagée serveur / client
+  search.ts       recherche texte et filtres de colonnes, partagés serveur / client
+  storage.ts      lecture / écriture de la source (Vercel Blob ou disque)
   report.ts       pipeline complet (filtre → agrégation → compteurs)
   export.ts       génération du classeur Excel (ExcelJS)
   api.ts          sérialisation JSON
-src/app/api/nomenclature/{meta,result,export}/route.ts
-src/components/  UI (formulaire de période, panneau de résultats)
+src/app/api/nomenclature/{meta,result,export,source}/route.ts
+src/app/reglages/                page de mise à jour du fichier source
+src/components/                  UI (période, résultats, filtres de colonnes, import)
 ```
 
 Le fichier est lu et normalisé une seule fois (~0,9 s), puis conservé en cache mémoire : les
@@ -77,6 +85,8 @@ requêtes suivantes répondent en quelques millisecondes. Pas de base de donnée
 | `GET /api/nomenclature/meta` | `{ minDate, maxDate, totalRows, sheet }` |
 | `GET /api/nomenclature/result?start=&end=&q=&lab=&dci=` | statistiques + laboratoires + couples labo/DCI (JSON gzip) |
 | `GET /api/nomenclature/export?start=&end=&q=&lab=&dci=` | le fichier `.xlsx` |
+| `GET /api/nomenclature/source` | état de la source : stockage, origine, date de mise à jour, compteurs |
+| `POST /api/nomenclature/source` | remplace la nomenclature (multipart : `file`, `password`) |
 
 Tous les filtres sont facultatifs et appliquent exactement ce que fait l'écran : `q` est la
 recherche libre (laboratoire, DCI ou marque), `lab` et `dci` sont les valeurs exactes des menus
@@ -85,12 +95,29 @@ déroulants de colonnes, comparées sans tenir compte de la casse ni des accents
 ## Écran
 
 - **Laboratoires** : un laboratoire se déplie et montre ses molécules avec leur première date.
-- **Molécules** : ligne de filtres alignée sur les colonnes — menu déroulant *Laboratoire*, menu
-  déroulant des *DCI disponibles* (restreint au laboratoire choisi, et inversement), et tri
-  croissant / décroissant sur *Première date* en cliquant l'en-tête de colonne.
+- **Molécules** : les titres de colonnes *sont* les filtres, comme un filtre automatique de tableur.
+  *Laboratoire* et *DCI / Molécule* ouvrent une liste recherchable des valeurs encore disponibles
+  (choisir un laboratoire restreint la liste des DCI, et inversement) ; *Première date* trie en
+  croissant, puis décroissant, puis revient à l'ordre laboratoire / DCI.
 - Les compteurs, les deux onglets et l'export Excel reflètent toujours les mêmes filtres ; le tri,
   lui, ne concerne que l'affichage, l'Excel gardant son ordre laboratoire puis DCI et son filtre
   automatique.
+
+## Réglages — remplacer la nomenclature
+
+`/reglages` permet d'importer un nouveau fichier `.xlsx` (jusqu'à 4 Mo, la limite d'une requête
+Vercel). L'import est protégé par `NOMENCLATURE_ADMIN_PASSWORD` et se déroule ainsi :
+
+1. le fichier est reçu en mémoire ;
+2. il est vérifié de bout en bout — taille, signature `.xlsx`, onglet, en-têtes, et présence d'au
+   moins une ligne exploitable ;
+3. **seulement s'il est valide**, il remplace le précédent (Vercel Blob en production, disque en
+   local) et écrase définitivement l'ancienne version ;
+4. le cache mémoire est remplacé dans la foulée ; les autres instances du serveur détectent la
+   nouvelle version en moins de 30 secondes.
+
+Un fichier illisible, tronqué ou vide est refusé avec un message explicite et **ne touche pas** à la
+nomenclature en service.
 
 ## Fichier Excel généré
 

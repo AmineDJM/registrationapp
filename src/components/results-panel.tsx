@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { LaboratoryRow, MoleculeRow, ReportResponse } from "@/lib/nomenclature/api";
+import { ColumnFilter } from "@/components/column-filter";
 import { frenchCollator } from "@/lib/nomenclature/aggregate";
 import { toComparisonKey } from "@/lib/nomenclature/normalize";
 import { formatCount, isoToFrench, pluralize } from "@/lib/format";
@@ -167,7 +168,7 @@ export function ResultsPanel({
           ) : null}
         </div>
       ) : (
-        <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-surface">
+        <div className="mt-3 rounded-2xl border border-border bg-surface">
           {tab === "laboratories" ? (
             <LaboratoryTable
               rows={shown as LaboratoryRow[]}
@@ -190,7 +191,7 @@ export function ResultsPanel({
             />
           )}
 
-          <div className="flex flex-col items-center gap-2 border-t border-border px-4 py-3 sm:flex-row sm:justify-between">
+          <div className="flex flex-col items-center gap-2 rounded-b-2xl border-t border-border px-4 py-3 sm:flex-row sm:justify-between">
             <span className="text-xs text-text-subtle">
               {formatCount(shown.length)} sur {formatCount(rows.length)}{" "}
               {tab === "laboratories" ? "laboratoires" : "couples laboratoire / molécule"}
@@ -367,8 +368,9 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-const MOLECULE_GRID =
-  "grid grid-cols-1 gap-x-4 gap-y-0.5 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_104px_88px] sm:items-baseline sm:gap-y-1";
+/** Single source of truth for the column widths: header and rows must not drift apart. */
+const COLUMN_TEMPLATE = "sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_124px_84px]";
+const MOLECULE_GRID = `grid grid-cols-1 gap-x-4 gap-y-0.5 ${COLUMN_TEMPLATE} sm:items-baseline sm:gap-y-1`;
 
 function MoleculeTable({
   rows,
@@ -397,49 +399,46 @@ function MoleculeTable({
 
   return (
     <div>
-      <div className="border-b border-border bg-surface-muted">
-        <div
-          className={`${MOLECULE_GRID} hidden px-4 pt-2 text-[11px] font-medium uppercase tracking-wide text-text-subtle sm:grid`}
+      {/* Column titles are the filters: a compact bar on mobile, aligned columns above. */}
+      <div
+        className={`flex flex-wrap items-center gap-1 rounded-t-2xl border-b border-border bg-surface-muted px-3 py-2 sm:grid ${COLUMN_TEMPLATE} sm:gap-x-4 sm:py-1.5`}
+      >
+        <ColumnFilter
+          title="Laboratoire"
+          allLabel="Tous les laboratoires"
+          value={laboratory}
+          options={laboratoryOptions}
+          onChange={onLaboratoryChange}
+        />
+        <ColumnFilter
+          title="DCI / Molécule"
+          allLabel="Toutes les molécules"
+          value={dci}
+          options={dciOptions}
+          onChange={onDciChange}
+        />
+        <button
+          type="button"
+          onClick={onSortToggle}
+          aria-label={sortLabel(sortMode)}
+          title={sortLabel(sortMode)}
+          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium uppercase tracking-wide transition-colors ${
+            sortMode === "default"
+              ? "text-text-subtle hover:bg-surface hover:text-text"
+              : "bg-accent-soft text-accent"
+          }`}
         >
-          <span>Laboratoire</span>
-          <span>DCI / Molécule</span>
-          <button
-            type="button"
-            onClick={onSortToggle}
-            aria-label={sortLabel(sortMode)}
-            className="flex items-center gap-1 text-left uppercase transition-colors hover:text-text"
-          >
-            Première date <SortIcon mode={sortMode} />
-          </button>
-          <span className="text-right">Enregistr.</span>
-        </div>
-
-        {/* Filter row, aligned with the columns on wide screens, stacked on mobile. */}
-        <div className={`${MOLECULE_GRID} px-4 py-2 sm:pb-2 sm:pt-1.5`}>
-          <FilterSelect
-            label="Laboratoire"
-            allLabel="Tous les laboratoires"
-            value={laboratory}
-            options={laboratoryOptions}
-            onChange={onLaboratoryChange}
-          />
-          <FilterSelect
-            label="DCI / Molécule"
-            allLabel="Toutes les molécules"
-            value={dci}
-            options={dciOptions}
-            onChange={onDciChange}
-          />
-          <div className="mt-1 flex items-center gap-2 sm:col-span-2 sm:col-start-3 sm:mt-0 sm:justify-end">
-            <button type="button" onClick={onSortToggle} className={`${outlineButtonClass} sm:hidden`}>
-              {sortLabel(sortMode)}
+          Première date <SortIcon mode={sortMode} />
+        </button>
+        <div className="flex items-center justify-end gap-2">
+          <span className="hidden text-[11px] font-medium uppercase tracking-wide text-text-subtle sm:inline">
+            {canReset ? null : "Enregistr."}
+          </span>
+          {canReset ? (
+            <button type="button" onClick={onReset} className={outlineButtonClass}>
+              Réinitialiser
             </button>
-            {canReset ? (
-              <button type="button" onClick={onReset} className={outlineButtonClass}>
-                Réinitialiser
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
 
@@ -473,49 +472,6 @@ function MoleculeTable({
         ))}
       </ul>
     </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  allLabel,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  allLabel: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
-  // A selection kept from a wider list must stay visible, even once the other filter hides it.
-  const listed =
-    value !== "" && !options.some((option) => toComparisonKey(option) === toComparisonKey(value))
-      ? [value, ...options]
-      : options;
-
-  return (
-    <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-[11px] font-medium uppercase tracking-wide text-text-subtle sm:hidden">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        aria-label={`Filtrer par ${label}`}
-        className={`h-9 w-full min-w-0 rounded-lg border px-2 text-base outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15 sm:text-[13px] ${
-          value ? "border-accent/50 bg-accent-soft text-text" : "border-border bg-surface text-text-muted"
-        }`}
-      >
-        <option value="">{allLabel}</option>
-        {listed.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
