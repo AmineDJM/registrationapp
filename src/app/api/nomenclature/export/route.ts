@@ -10,7 +10,11 @@ export async function GET(request: Request): Promise<Response> {
   try {
     const params = new URL(request.url).searchParams;
     const dataset = await getDataset();
-    const report = buildReport(dataset, params.get("start"), params.get("end"), params.get("q"));
+    const report = buildReport(dataset, params.get("start"), params.get("end"), {
+      query: params.get("q"),
+      laboratory: params.get("lab"),
+      dci: params.get("dci"),
+    });
     const buffer = await buildWorkbookBuffer(report, new Date());
 
     return new Response(new Uint8Array(buffer), {

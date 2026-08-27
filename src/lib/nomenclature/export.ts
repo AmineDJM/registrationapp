@@ -37,7 +37,9 @@ function addSummarySheet(workbook: ExcelJS.Workbook, report: NomenclatureReport,
     ["Nombre de molécules (DCI) uniques", report.stats.uniqueMolecules],
     ["Nombre d'enregistrements", report.stats.registrations],
   ];
-  if (report.query) meta.push(["Filtre appliqué", report.query]);
+  if (report.query) meta.push(["Recherche", report.query]);
+  if (report.laboratory) meta.push(["Filtre laboratoire", report.laboratory]);
+  if (report.dci) meta.push(["Filtre molécule (DCI)", report.dci]);
 
   for (const [label, value] of meta) {
     const row = sheet.addRow([label, value]);

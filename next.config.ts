@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   // Keeps the source workbook next to the server bundle when the app is deployed standalone.
   outputFileTracingIncludes: {
     "/": ["./data/nomenclature.xlsx"],
+    "/reglages": ["./data/nomenclature.xlsx"],
     "/api/nomenclature/**": ["./data/nomenclature.xlsx"],
   },
 };

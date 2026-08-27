@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
 import ExcelJS from "exceljs";
+import { describeSource, getBundledFilePath, readSource, type SourceDescriptor } from "./storage";
 import { dayToDate, toDayNumberFromCell } from "./excel-date";
 import { normalizeDci, normalizeLabName, normalizeText, toComparisonKey } from "./normalize";
 import type { IndexedRegistration, NomenclatureDataset } from "./types";
@@ -39,7 +39,7 @@ const FIELD_SPECS: { field: FieldName; header: string; fallbackColumn: string; r
 ];
 
 export function getSourceFilePath(): string {
-  return process.env.NOMENCLATURE_FILE ?? path.join(process.cwd(), "data", "nomenclature.xlsx");
+  return getBundledFilePath();
 }
 
 /** Uppercase, accent- and punctuation-free header used to match columns whatever the typography. */
@@ -152,25 +152,108 @@ export function buildDataset(sheet: ExcelJS.Worksheet): NomenclatureDataset {
   };
 }
 
-export async function readDatasetFromFile(filePath = getSourceFilePath()): Promise<NomenclatureDataset> {
-  const buffer = await readFile(filePath);
+/** Raised when an uploaded workbook cannot be used; the message is meant for the user. */
+export class InvalidSourceError extends Error {}
+
+const ZIP_SIGNATURE = [0x50, 0x4b];
+
+export async function readDatasetFromBuffer(buffer: Buffer): Promise<NomenclatureDataset> {
   const workbook = new ExcelJS.Workbook();
   // ExcelJS types the reader against its own Buffer alias; the Node buffer is what it actually consumes.
   await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
   const sheet = workbook.getWorksheet(SHEET_NAME) ?? workbook.worksheets[0];
-  if (!sheet) throw new Error(`Onglet « ${SHEET_NAME} » introuvable dans ${path.basename(filePath)}.`);
+  if (!sheet) throw new Error(`Onglet « ${SHEET_NAME} » introuvable dans le classeur.`);
   return buildDataset(sheet);
 }
 
-let cache: Promise<NomenclatureDataset> | null = null;
+export async function readDatasetFromFile(filePath = getSourceFilePath()): Promise<NomenclatureDataset> {
+  return readDatasetFromBuffer(await readFile(filePath));
+}
 
-/** Parses once, then serves every request from memory. */
-export function getDataset(): Promise<NomenclatureDataset> {
-  if (!cache) {
-    cache = readDatasetFromFile().catch((error: unknown) => {
-      cache = null; // a failed load must not poison the cache
-      throw error;
-    });
+/**
+ * Checks an uploaded workbook end to end *before* it is allowed to replace the live one:
+ * a file that cannot produce a usable dataset is rejected, and nothing is overwritten.
+ */
+export async function validateSourceBuffer(
+  buffer: Buffer,
+  maxBytes: number,
+): Promise<NomenclatureDataset> {
+  if (buffer.byteLength === 0) throw new InvalidSourceError("Le fichier est vide.");
+  if (buffer.byteLength > maxBytes) {
+    throw new InvalidSourceError(
+      `Le fichier dépasse ${Math.floor(maxBytes / 1_000_000)} Mo. Réduisez-le ou déployez-le avec le code.`,
+    );
   }
-  return cache;
+  if (!ZIP_SIGNATURE.every((byte, index) => buffer[index] === byte)) {
+    throw new InvalidSourceError("Ce n'est pas un fichier .xlsx (format non reconnu).");
+  }
+
+  let dataset: NomenclatureDataset;
+  try {
+    dataset = await readDatasetFromBuffer(buffer);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "format illisible";
+    throw new InvalidSourceError(`Classeur illisible : ${detail}`);
+  }
+
+  if (dataset.totalRows === 0) throw new InvalidSourceError("Le classeur ne contient aucune ligne de données.");
+  if (dataset.datedRegistrations.length === 0 || dataset.minDay === null || dataset.maxDay === null) {
+    throw new InvalidSourceError(
+      "Aucune ligne exploitable : laboratoire, DCI et date d'enregistrement initial sont requis.",
+    );
+  }
+  return dataset;
+}
+
+type CacheEntry = {
+  descriptor: SourceDescriptor;
+  dataset: NomenclatureDataset;
+  checkedAt: number;
+};
+
+/** How long a loaded dataset is trusted before the source is checked for a newer version. */
+const FRESHNESS_MS = 30_000;
+
+let cache: CacheEntry | null = null;
+let inFlight: Promise<NomenclatureDataset> | null = null;
+
+/**
+ * Parses once, then serves every request from memory. The source is re-checked at most
+ * every 30 s so an upload made by another server instance is picked up by itself.
+ */
+export function getDataset(): Promise<NomenclatureDataset> {
+  if (cache && Date.now() - cache.checkedAt < FRESHNESS_MS) return Promise.resolve(cache.dataset);
+  if (inFlight) return inFlight;
+
+  inFlight = refreshDataset().finally(() => {
+    inFlight = null;
+  });
+  return inFlight;
+}
+
+async function refreshDataset(): Promise<NomenclatureDataset> {
+  const descriptor = await describeSource();
+  if (cache && cache.descriptor.version === descriptor.version) {
+    cache = { ...cache, checkedAt: Date.now() };
+    return cache.dataset;
+  }
+
+  const dataset = await readDatasetFromBuffer(await readSource(descriptor));
+  cache = { descriptor, dataset, checkedAt: Date.now() };
+  return dataset;
+}
+
+/** Installs a dataset that was just validated, so the upload is visible immediately. */
+export function primeDatasetCache(dataset: NomenclatureDataset, descriptor: SourceDescriptor): void {
+  cache = { descriptor, dataset, checkedAt: Date.now() };
+}
+
+export function invalidateDatasetCache(): void {
+  cache = null;
+}
+
+/** Describes what is currently served, for the settings screen. */
+export async function getSourceState(): Promise<{ descriptor: SourceDescriptor; dataset: NomenclatureDataset }> {
+  const dataset = await getDataset();
+  return { descriptor: cache?.descriptor ?? (await describeSource()), dataset };
 }

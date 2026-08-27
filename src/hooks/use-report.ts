@@ -13,6 +13,11 @@ type Outcome = { key: string; report: ReportResponse | null; error: string | nul
 
 const cache = new Map<string, ReportResponse>();
 
+/** Called after the source workbook is replaced: every cached period is stale. */
+export function clearReportCache(): void {
+  cache.clear();
+}
+
 async function fetchReport(start: string, end: string, signal: AbortSignal): Promise<ReportResponse> {
   const response = await fetch(`/api/nomenclature/result?start=${start}&end=${end}`, { signal });
   const payload: unknown = await response.json();

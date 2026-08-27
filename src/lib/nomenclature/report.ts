@@ -1,6 +1,6 @@
 import { buildLaboratorySummary, countUniqueMolecules, groupByLaboratoryAndMolecule } from "./aggregate";
 import { filterRegistrationsByDate, resolveDayRange } from "./filter";
-import { filterMolecules } from "./search";
+import { filterByDci, filterByLaboratory, filterMolecules } from "./search";
 import type {
   DayRange,
   IndexedRegistration,
@@ -16,9 +16,18 @@ export type ReportStats = {
   registrations: number;
 };
 
+/** Everything that narrows a report beyond its period. */
+export type ReportFilters = {
+  query?: string | null;
+  laboratory?: string | null;
+  dci?: string | null;
+};
+
 export type NomenclatureReport = {
   range: DayRange;
   query: string | null;
+  laboratory: string | null;
+  dci: string | null;
   registrations: IndexedRegistration[];
   molecules: LaboratoryMolecule[];
   summary: LaboratorySummary[];
@@ -27,26 +36,32 @@ export type NomenclatureReport = {
 
 /**
  * Full pipeline: date range resolution, filtering, laboratory/DCI grouping and counters.
- * `query` narrows the report exactly like the on-screen search does.
+ * The filters narrow the report exactly like the on-screen search and column dropdowns do.
  */
 export function buildReport(
   dataset: NomenclatureDataset,
   startInput: string | null | undefined,
   endInput: string | null | undefined,
-  query?: string | null,
+  filters: ReportFilters = {},
 ): NomenclatureReport {
   const range = resolveDayRange(dataset, startInput, endInput);
   const rows = filterRegistrationsByDate(dataset.datedRegistrations, range.startDay, range.endDay);
   const allMolecules = groupByLaboratoryAndMolecule(rows);
 
-  const trimmedQuery = query?.trim() ? query.trim() : null;
-  const molecules = filterMolecules(allMolecules, trimmedQuery);
-  const registrations = trimmedQuery ? restrictRowsToPairs(rows, molecules) : rows;
+  const query = trimOrNull(filters.query);
+  const laboratory = trimOrNull(filters.laboratory);
+  const dci = trimOrNull(filters.dci);
+
+  const molecules = filterByDci(filterByLaboratory(filterMolecules(allMolecules, query), laboratory), dci);
+  const narrowed = query !== null || laboratory !== null || dci !== null;
+  const registrations = narrowed ? restrictRowsToPairs(rows, molecules) : rows;
   const summary = buildLaboratorySummary(molecules);
 
   return {
     range,
-    query: trimmedQuery,
+    query,
+    laboratory,
+    dci,
     registrations,
     molecules,
     summary,
@@ -57,6 +72,11 @@ export function buildReport(
       registrations: registrations.length,
     },
   };
+}
+
+function trimOrNull(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
 }
 
 function restrictRowsToPairs(
