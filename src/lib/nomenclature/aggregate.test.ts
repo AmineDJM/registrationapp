@@ -188,14 +188,55 @@ describe("resolveDayRange and buildReport", () => {
   });
 
   it("narrows the report with the search query, laboratory or molecule", () => {
-    expect(buildReport(dataset, period.start, period.end, "biopharm").stats.laboratoryMolecules).toBe(2);
-    expect(buildReport(dataset, period.start, period.end, "midazolam").stats).toMatchObject({
+    const search = (query: string) => buildReport(dataset, period.start, period.end, { query });
+    expect(search("biopharm").stats.laboratoryMolecules).toBe(2);
+    expect(search("midazolam").stats).toMatchObject({
       laboratories: 1,
       laboratoryMolecules: 1,
       registrations: 2,
     });
-    expect(buildReport(dataset, period.start, period.end, "keypharm").stats.laboratoryMolecules).toBe(1);
-    expect(buildReport(dataset, period.start, period.end, "  ").stats.laboratoryMolecules).toBe(4);
+    expect(search("keypharm").stats.laboratoryMolecules).toBe(1);
+    expect(search("  ").stats.laboratoryMolecules).toBe(4);
+  });
+
+  it("narrows the report with the laboratory dropdown", () => {
+    const report = buildReport(dataset, period.start, period.end, { laboratory: "BIOPHARM" });
+    expect(report.stats).toMatchObject({ laboratories: 1, laboratoryMolecules: 2, registrations: 5 });
+    expect(report.molecules.every((molecule) => molecule.laboratory === "BIOPHARM")).toBe(true);
+  });
+
+  it("matches the laboratory whatever its typography", () => {
+    const report = buildReport(dataset, period.start, period.end, {
+      laboratory: "roche pharma schweiz ag",
+    });
+    expect(report.stats.laboratoryMolecules).toBe(1);
+    expect(report.stats.registrations).toBe(2);
+  });
+
+  it("narrows the report with the DCI dropdown", () => {
+    const report = buildReport(dataset, period.start, period.end, { dci: "PEMBROLIZUMAB" });
+    expect(report.stats).toMatchObject({ laboratories: 1, laboratoryMolecules: 1, registrations: 4 });
+  });
+
+  it("combines both dropdowns", () => {
+    expect(
+      buildReport(dataset, period.start, period.end, { laboratory: "BIOPHARM", dci: "APIXABAN" }).stats,
+    ).toMatchObject({ laboratories: 1, laboratoryMolecules: 1, registrations: 1 });
+    expect(
+      buildReport(dataset, period.start, period.end, { laboratory: "BIOPHARM", dci: "MIDAZOLAM" }).stats
+        .laboratoryMolecules,
+    ).toBe(0);
+  });
+
+  it("keeps the filters on the report so the export can label them", () => {
+    const report = buildReport(dataset, period.start, period.end, {
+      query: " apix ",
+      laboratory: " BIOPHARM ",
+      dci: null,
+    });
+    expect(report.query).toBe("apix");
+    expect(report.laboratory).toBe("BIOPHARM");
+    expect(report.dci).toBeNull();
   });
 
   it("returns an empty report instead of failing when nothing matches", () => {

@@ -75,10 +75,22 @@ requêtes suivantes répondent en quelques millisecondes. Pas de base de donnée
 | Route | Réponse |
 | --- | --- |
 | `GET /api/nomenclature/meta` | `{ minDate, maxDate, totalRows, sheet }` |
-| `GET /api/nomenclature/result?start=&end=&q=` | statistiques + laboratoires + couples labo/DCI (JSON gzip) |
-| `GET /api/nomenclature/export?start=&end=&q=` | le fichier `.xlsx` |
+| `GET /api/nomenclature/result?start=&end=&q=&lab=&dci=` | statistiques + laboratoires + couples labo/DCI (JSON gzip) |
+| `GET /api/nomenclature/export?start=&end=&q=&lab=&dci=` | le fichier `.xlsx` |
 
-`q` est facultatif et applique la même recherche que celle de l'écran (laboratoire, DCI ou marque).
+Tous les filtres sont facultatifs et appliquent exactement ce que fait l'écran : `q` est la
+recherche libre (laboratoire, DCI ou marque), `lab` et `dci` sont les valeurs exactes des menus
+déroulants de colonnes, comparées sans tenir compte de la casse ni des accents.
+
+## Écran
+
+- **Laboratoires** : un laboratoire se déplie et montre ses molécules avec leur première date.
+- **Molécules** : ligne de filtres alignée sur les colonnes — menu déroulant *Laboratoire*, menu
+  déroulant des *DCI disponibles* (restreint au laboratoire choisi, et inversement), et tri
+  croissant / décroissant sur *Première date* en cliquant l'en-tête de colonne.
+- Les compteurs, les deux onglets et l'export Excel reflètent toujours les mêmes filtres ; le tri,
+  lui, ne concerne que l'affichage, l'Excel gardant son ordre laboratoire puis DCI et son filtre
+  automatique.
 
 ## Fichier Excel généré
 

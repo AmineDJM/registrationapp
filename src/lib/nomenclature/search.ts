@@ -28,3 +28,20 @@ export function filterMolecules<T extends SearchableMolecule>(items: T[], query:
   const tokens = query ? tokenizeQuery(query) : [];
   return tokens.length === 0 ? items : items.filter((item) => matchesTokens(item, tokens));
 }
+
+/** Exact match on a dropdown selection, insensitive to case and accents. */
+export function matchesValue(value: string, selected: string | null | undefined): boolean {
+  if (!selected) return true;
+  return searchKey(value) === searchKey(selected);
+}
+
+export function filterByLaboratory<T extends { laboratory: string }>(
+  items: T[],
+  laboratory: string | null | undefined,
+): T[] {
+  return laboratory ? items.filter((item) => matchesValue(item.laboratory, laboratory)) : items;
+}
+
+export function filterByDci<T extends { dci: string }>(items: T[], dci: string | null | undefined): T[] {
+  return dci ? items.filter((item) => matchesValue(item.dci, dci)) : items;
+}

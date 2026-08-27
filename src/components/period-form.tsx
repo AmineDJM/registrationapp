@@ -158,7 +158,7 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
 }
 
 const inputClass =
-  "h-11 w-full rounded-xl border border-border bg-surface px-3 text-[15px] text-text outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15";
+  "h-11 w-full rounded-xl border border-border bg-surface px-3 text-base text-text outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/15";
 
 const chipClass =
   "rounded-lg border border-border px-2.5 py-1 text-xs text-text-muted transition-colors hover:border-border-strong hover:text-text";
